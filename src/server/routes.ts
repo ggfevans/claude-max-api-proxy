@@ -15,6 +15,20 @@ import {
 import type { OpenAIChatRequest } from "../types/openai.js";
 import type { ClaudeCliAssistant, ClaudeCliResult, ClaudeCliStreamEvent } from "../types/claude-cli.js";
 
+const DEFAULT_MAX_CONCURRENT = 3;
+
+function getMaxConcurrent(): number {
+  const raw = process.env.MAX_CONCURRENT;
+  if (!raw) return DEFAULT_MAX_CONCURRENT;
+
+  const parsed = Number.parseInt(raw, 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) return DEFAULT_MAX_CONCURRENT;
+
+  return parsed;
+}
+
+let activeRequests = 0;
+
 /**
  * Handle POST /v1/chat/completions
  *
@@ -41,14 +55,32 @@ export async function handleChatCompletions(
       return;
     }
 
-    // Convert to CLI input format
-    const cliInput = openaiToCli(body);
-    const subprocess = new ClaudeSubprocess();
+    const maxConcurrent = getMaxConcurrent();
+    if (activeRequests >= maxConcurrent) {
+      res.status(429).json({
+        error: {
+          message: `Too many concurrent requests (max ${maxConcurrent})`,
+          type: "rate_limit_error",
+          code: "too_many_requests",
+        },
+      });
+      return;
+    }
 
-    if (stream) {
-      await handleStreamingResponse(req, res, subprocess, cliInput, requestId);
-    } else {
-      await handleNonStreamingResponse(res, subprocess, cliInput, requestId);
+    activeRequests += 1;
+
+    try {
+      // Convert to CLI input format
+      const cliInput = openaiToCli(body);
+      const subprocess = new ClaudeSubprocess();
+
+      if (stream) {
+        await handleStreamingResponse(req, res, subprocess, cliInput, requestId);
+      } else {
+        await handleNonStreamingResponse(res, subprocess, cliInput, requestId);
+      }
+    } finally {
+      activeRequests = Math.max(0, activeRequests - 1);
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
@@ -132,7 +164,7 @@ async function handleStreamingResponse(
 
     // Handle final assistant message (for model name)
     subprocess.on("assistant", (message: ClaudeCliAssistant) => {
-      lastModel = message.message.model;
+      lastModel = message.message.model ?? lastModel;
     });
 
     subprocess.on("result", (_result: ClaudeCliResult) => {

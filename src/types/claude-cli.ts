@@ -44,7 +44,8 @@ export interface ClaudeCliAssistantContent {
 export interface ClaudeCliAssistant {
   type: "assistant";
   message: {
-    model: string;
+    // Some Claude Code CLI versions omit model
+    model?: string;
     id: string;
     type: "message";
     role: "assistant";

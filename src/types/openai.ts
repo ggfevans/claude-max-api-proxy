@@ -3,15 +3,30 @@
  * Used for Clawdbot integration
  */
 
-export interface OpenAIChatContentPart {
-  type: "text" | "image_url";
-  text?: string;
-  image_url?: { url: string };
+export interface OpenAIChatContentPartText {
+  type: "text";
+  text: string;
 }
+
+export interface OpenAIChatContentPartImageUrl {
+  type: "image_url";
+  image_url: { url: string };
+}
+
+// OpenAI-compatible content parts (we primarily support text and image_url parts)
+export type OpenAIChatContentPart =
+  | OpenAIChatContentPartText
+  | OpenAIChatContentPartImageUrl
+  | {
+      type: string;
+      [key: string]: unknown;
+    };
+
+export type OpenAIChatMessageContent = string | OpenAIChatContentPart[];
 
 export interface OpenAIChatMessage {
   role: "system" | "user" | "assistant";
-  content: string | OpenAIChatContentPart[];
+  content: OpenAIChatMessageContent;
 }
 
 export interface OpenAIChatRequest {
