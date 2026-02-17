@@ -3,9 +3,51 @@
  * Used for Clawdbot integration
  */
 
+export interface OpenAIChatContentPartText {
+  type: "text";
+  text: string;
+}
+
+export interface OpenAIChatContentPartImageUrl {
+  type: "image_url";
+  image_url: { url: string };
+}
+
+// OpenAI-compatible content parts (we primarily support text and image_url parts)
+export type OpenAIChatContentPart =
+  | OpenAIChatContentPartText
+  | OpenAIChatContentPartImageUrl
+  | {
+      type: string;
+      [key: string]: unknown;
+    };
+
+export type OpenAIChatMessageContent = string | OpenAIChatContentPart[];
+
 export interface OpenAIChatMessage {
   role: "system" | "user" | "assistant";
-  content: string;
+  content: OpenAIChatMessageContent;
+}
+
+/**
+ * OpenAI function/tool parameter schema (JSON Schema subset)
+ */
+export interface OpenAIFunctionParameters {
+  type: string;
+  properties?: Record<string, unknown>;
+  required?: string[];
+  [key: string]: unknown;
+}
+
+export interface OpenAIFunction {
+  name: string;
+  description?: string;
+  parameters?: OpenAIFunctionParameters;
+}
+
+export interface OpenAITool {
+  type: "function";
+  function: OpenAIFunction;
 }
 
 export interface OpenAIChatRequest {
@@ -18,6 +60,7 @@ export interface OpenAIChatRequest {
   frequency_penalty?: number;
   presence_penalty?: number;
   user?: string; // Used for session mapping
+  tools?: OpenAITool[]; // OpenAI function-calling tools (from OpenClaw skills)
 }
 
 export interface OpenAIChatResponseChoice {
