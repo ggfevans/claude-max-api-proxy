@@ -2,7 +2,7 @@
  * Converts OpenAI chat request format to Claude CLI input
  */
 
-import type { OpenAIChatRequest } from "../types/openai.js";
+import type { OpenAIChatRequest, OpenAIChatMessageContent } from "../types/openai.js";
 
 export type ClaudeModel = "opus" | "sonnet" | "haiku";
 
@@ -48,17 +48,24 @@ export function extractModel(model: string): ClaudeModel {
 
 /**
  * Extract text from message content, handling both string and array formats.
+ *
  * OpenAI spec allows content to be a string or an array of content parts.
+ * We only preserve text parts; non-text parts are ignored.
  */
-function extractContent(content: string | Array<{ type: string; text?: string; image_url?: { url: string } }>): string {
-  if (typeof content === "string") {
-    return content;
-  }
+function extractContent(content: OpenAIChatMessageContent): string {
+  if (typeof content === "string") return content;
 
   if (Array.isArray(content)) {
     return content
-      .filter((part) => part.type === "text" && part.text)
-      .map((part) => part.text!)
+      .map((part) => {
+        if (!part || typeof part !== "object") return "";
+        if ("type" in part && (part as { type?: unknown }).type === "text") {
+          const text = (part as { text?: unknown }).text;
+          return typeof text === "string" ? text : "";
+        }
+        return "";
+      })
+      .filter(Boolean)
       .join("\n");
   }
 

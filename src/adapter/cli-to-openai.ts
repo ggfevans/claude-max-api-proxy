@@ -102,9 +102,12 @@ export function cliResultToOpenai(
  * Normalize Claude model names to a consistent format
  * e.g., "claude-sonnet-4-5-20250929" -> "claude-sonnet-4"
  */
-function normalizeModelName(model: string): string {
-  if (model.includes("opus")) return "claude-opus-4";
-  if (model.includes("sonnet")) return "claude-sonnet-4";
-  if (model.includes("haiku")) return "claude-haiku-4";
+function normalizeModelName(model: string | undefined | null): string {
+  if (!model) return "claude-sonnet-4";
+
+  const normalized = model.toLowerCase();
+  if (normalized.includes("opus")) return "claude-opus-4";
+  if (normalized.includes("sonnet")) return "claude-sonnet-4";
+  if (normalized.includes("haiku")) return "claude-haiku-4";
   return model;
 }
