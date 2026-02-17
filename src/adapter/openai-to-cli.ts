@@ -2,7 +2,7 @@
  * Converts OpenAI chat request format to Claude CLI input
  */
 
-import type { OpenAIChatRequest, OpenAIChatMessageContent } from "../types/openai.js";
+import type { OpenAIChatRequest, OpenAIChatMessageContent, OpenAITool } from "../types/openai.js";
 
 export type ClaudeModel = "opus" | "sonnet" | "haiku";
 
@@ -74,13 +74,67 @@ function extractContent(content: OpenAIChatMessageContent): string {
 }
 
 /**
+ * Convert OpenAI tools array to a text description for the prompt.
+ *
+ * Claude CLI in --print mode doesn't accept OpenAI-format tool schemas.
+ * Instead, we serialise tool definitions as structured text so the model
+ * knows what capabilities are available (e.g. OpenClaw's bash, cron, etc.).
+ *
+ * We emit a compact format to minimise token overhead while preserving
+ * enough detail for the model to call tools correctly via text output.
+ */
+function toolsToPromptSection(tools: OpenAITool[]): string {
+  if (!tools || tools.length === 0) return "";
+
+  const descriptions = tools.map((tool) => {
+    const fn = tool.function;
+    let entry = `- **${fn.name}**`;
+    if (fn.description) {
+      entry += `: ${fn.description}`;
+    }
+    if (fn.parameters && fn.parameters.properties) {
+      const params = Object.entries(fn.parameters.properties)
+        .map(([name, schema]) => {
+          const s = schema as Record<string, unknown>;
+          const required = fn.parameters?.required?.includes(name);
+          const typeStr = s.type ? ` (${s.type})` : "";
+          const desc = s.description ? ` — ${s.description}` : "";
+          return `    - \`${name}\`${typeStr}${required ? " *required*" : ""}${desc}`;
+        })
+        .join("\n");
+      if (params) entry += "\n" + params;
+    }
+    return entry;
+  });
+
+  return [
+    "<available_tools>",
+    "The following tools are available for you to use. To invoke a tool,",
+    "output a JSON block with {\"tool\": \"<name>\", \"parameters\": {...}}.",
+    "",
+    ...descriptions,
+    "</available_tools>",
+  ].join("\n");
+}
+
+/**
  * Convert OpenAI messages array to a single prompt string for Claude CLI
  *
  * Claude Code CLI in --print mode expects a single prompt, not a conversation.
  * We format the messages into a readable format that preserves context.
  */
-export function messagesToPrompt(messages: OpenAIChatRequest["messages"]): string {
+export function messagesToPrompt(
+  messages: OpenAIChatRequest["messages"],
+  tools?: OpenAITool[]
+): string {
   const parts: string[] = [];
+
+  // Inject tool definitions early so the model knows its capabilities
+  const toolSection = toolsToPromptSection(tools || []);
+  if (toolSection) {
+    parts.push(toolSection);
+    parts.push(""); // blank line separator
+  }
 
   for (const msg of messages) {
     const text = extractContent(msg.content);
@@ -111,7 +165,7 @@ export function messagesToPrompt(messages: OpenAIChatRequest["messages"]): strin
  */
 export function openaiToCli(request: OpenAIChatRequest): CliInput {
   return {
-    prompt: messagesToPrompt(request.messages),
+    prompt: messagesToPrompt(request.messages, request.tools),
     model: extractModel(request.model),
     sessionId: request.user, // Use OpenAI's user field for session mapping
   };

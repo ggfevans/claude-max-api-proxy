@@ -29,6 +29,27 @@ export interface OpenAIChatMessage {
   content: OpenAIChatMessageContent;
 }
 
+/**
+ * OpenAI function/tool parameter schema (JSON Schema subset)
+ */
+export interface OpenAIFunctionParameters {
+  type: string;
+  properties?: Record<string, unknown>;
+  required?: string[];
+  [key: string]: unknown;
+}
+
+export interface OpenAIFunction {
+  name: string;
+  description?: string;
+  parameters?: OpenAIFunctionParameters;
+}
+
+export interface OpenAITool {
+  type: "function";
+  function: OpenAIFunction;
+}
+
 export interface OpenAIChatRequest {
   model: string;
   messages: OpenAIChatMessage[];
@@ -39,6 +60,7 @@ export interface OpenAIChatRequest {
   frequency_penalty?: number;
   presence_penalty?: number;
   user?: string; // Used for session mapping
+  tools?: OpenAITool[]; // OpenAI function-calling tools (from OpenClaw skills)
 }
 
 export interface OpenAIChatResponseChoice {
